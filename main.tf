@@ -1,5 +1,11 @@
+locals {
+  name           = "reka-cloudproject"
+  codeConnection = "arn:aws:codeconnections:eu-west-1:774023531476:connection/f2d3434b-731c-4533-8621-973555b81a84"
+  repository     = "rekabojtor/cloud_project_website"
+}
+
 resource "aws_s3_bucket" "main" {
-  bucket = "reka-cloud-project"
+  bucket = local.name
 }
 
 # Allow a public bucket policy (we keep the ability to attach a public policy but do not make the whole bucket public)
@@ -21,11 +27,11 @@ resource "aws_s3_bucket_policy" "index_public" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid = "AllowPublicReadIndexObject",
-        Effect = "Allow",
+        Sid       = "AllowPublicReadIndexObject",
+        Effect    = "Allow",
         Principal = "*",
-        Action = "s3:GetObject",
-        Resource = "${aws_s3_bucket.main.arn}/index.html"
+        Action    = "s3:GetObject",
+        Resource  = "${aws_s3_bucket.main.arn}/index.html"
       }
     ]
   })
@@ -35,7 +41,7 @@ resource "aws_s3_bucket_policy" "index_public" {
 // CodePipeline: reka-git-to-s3-pipeline
 // Service role for the pipeline
 resource "aws_iam_role" "reka_git_to_s3_pipeline_role" {
-  name = "reka-git-to-s3-pipeline-role"
+  name = "${local.name}-git-to-s3-pipeline-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -52,14 +58,14 @@ resource "aws_iam_role" "reka_git_to_s3_pipeline_role" {
 }
 
 resource "aws_iam_role_policy" "reka_git_to_s3_pipeline_policy" {
-  name = "reka-git-to-s3-pipeline-policy"
+  name = "${local.name}-git-to-s3-pipeline-policy"
   role = aws_iam_role.reka_git_to_s3_pipeline_role.id
 
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid = "AllowS3ArtifactAndDeploy",
+        Sid    = "AllowS3ArtifactAndDeploy",
         Effect = "Allow",
         Action = [
           "s3:*"
@@ -70,21 +76,19 @@ resource "aws_iam_role_policy" "reka_git_to_s3_pipeline_policy" {
         ]
       },
       {
-        Sid = "UseCodeStarConnection",
+        Sid    = "UseCodeStarConnection",
         Effect = "Allow",
         Action = [
           "codestar-connections:UseConnection"
         ],
-        Resource = [
-          "arn:aws:codeconnections:eu-west-1:774023531476:connection/f2d3434b-731c-4533-8621-973555b81a84"
-        ]
+        Resource = [local.codeConnection]
       }
     ]
   })
 }
 
 resource "aws_codepipeline" "reka_git_to_s3_pipeline" {
-  name     = "reka-git-to-s3-pipeline"
+  name     = "${local.name}-git-to-s3-pipeline"
   role_arn = aws_iam_role.reka_git_to_s3_pipeline_role.arn
 
   artifact_store {
@@ -104,9 +108,9 @@ resource "aws_codepipeline" "reka_git_to_s3_pipeline" {
       output_artifacts = ["source_output"]
 
       configuration = {
-        ConnectionArn     = "arn:aws:codeconnections:eu-west-1:774023531476:connection/f2d3434b-731c-4533-8621-973555b81a84"
-        FullRepositoryId  = "rekabojtor/cloud_project_website"
-        BranchName        = "main"
+        ConnectionArn    = local.codeConnection
+        FullRepositoryId = local.repository
+        BranchName       = "main"
       }
     }
   }
