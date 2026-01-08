@@ -142,5 +142,3 @@ resource "aws_codepipeline" "reka_git_to_s3_pipeline" {
     }
   }
 }
-
-
