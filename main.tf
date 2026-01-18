@@ -102,7 +102,7 @@ resource "aws_codepipeline" "reka_git_to_s3_pipeline" {
     type     = "S3"
     location = aws_s3_bucket.main.bucket
   }
-  
+
   stage {
     name = "Source"
 
@@ -139,6 +139,85 @@ resource "aws_codepipeline" "reka_git_to_s3_pipeline" {
         BucketName = aws_s3_bucket.main.bucket
         Extract    = "true"
       }
+    }
+  }
+}
+
+# Creating a role for Lambda function
+resource "aws_iam_role" "lambda_role" {
+  name = "${local.name}-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# Defining policy for the Lambda function role
+resource "aws_iam_role_policy" "lambda_policy" {
+  name = "${local.name}-lambda-policy"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode(
+    # Allows PutObject (and overwrite) action on gemini.txt in the main S3 bucket
+    {
+      Version = "2012-10-17",
+      Statement = [
+        {
+          Sid    = "AllowS3Write",
+          Effect = "Allow",
+          Action = [
+            "s3:PutObject"
+          ],
+          Resource = [
+            "${aws_s3_bucket.main.arn}/gemini.txt"
+          ]
+        },
+        # Allow reading secrets from Secrets Manager
+        {
+          Sid    = "AccessSecretsManager",
+          Effect = "Allow",
+          Action = [
+            "secretsmanager:GetSecretValue"
+          ],
+          Resource = ["*"]
+        }
+      ]
+  })
+}
+
+# Creating a Secrets Manager secret to store the Gemini API key
+resource "aws_secretsmanager_secret" "gemini_api_key" {
+  name = "${local.name}-gemini-api-key"
+}
+
+# Storing the Gemini API key from the .gemini_api_key file into the Secrets Manager secret
+resource "aws_secretsmanager_secret_version" "gemini_api_key_version" {
+  secret_id     = aws_secretsmanager_secret.gemini_api_key.id
+  secret_string = file(".gemini_api_key")
+}
+
+# Creating the Lambda function to call Gemini API and store the result in the main S3 bucket
+resource "aws_lambda_function" "gemini_api_call" {
+  function_name = "${local.name}-gemini-api-call"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.11"
+  filename      = "./gemini_api_call/lambda_function.zip"
+
+  # Setting environment variables for the Lambda function
+  environment {
+    variables = {
+      BUCKET_NAME        = aws_s3_bucket.main.bucket
+      GEMINI_API_KEY_ARN = aws_secretsmanager_secret.gemini_api_key.arn
     }
   }
 }
