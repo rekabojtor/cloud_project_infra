@@ -210,7 +210,7 @@ resource "aws_lambda_function" "gemini_api_call" {
   function_name = "${local.name}-gemini-api-call"
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.11"
+  runtime       = "python3.13"
   filename      = "./gemini_api_call/lambda_function.zip"
 
   # Setting environment variables for the Lambda function
