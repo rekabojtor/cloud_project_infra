@@ -33,7 +33,10 @@ resource "aws_s3_bucket_policy" "index_public" {
         Effect    = "Allow",
         Principal = "*",
         Action    = "s3:GetObject",
-        Resource  = "${aws_s3_bucket.main.arn}/index.html"
+        Resource = [
+          "${aws_s3_bucket.main.arn}/index.html",
+          "${aws_s3_bucket.main.arn}/gemini.txt"
+        ]
       }
     ]
   })
@@ -220,4 +223,24 @@ resource "aws_lambda_function" "gemini_api_call" {
       GEMINI_API_KEY_ARN = aws_secretsmanager_secret.gemini_api_key.arn
     }
   }
+}
+
+# TODO: Comment
+resource "aws_cloudwatch_event_rule" "gemini_api_trigger_rule" {
+  name                = "${local.name}-trigger-rule"
+  schedule_expression = "rate(1 day)"
+}
+
+resource "aws_cloudwatch_event_target" "gemini_api_trigger_target" {
+  rule      = aws_cloudwatch_event_rule.gemini_api_trigger_rule.name
+  target_id = "${local.name}-trigger-target"
+  arn       = aws_lambda_function.gemini_api_call.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_invoke" {
+  statement_id  = "AllowExecutionFromEventBridgeDailyRate"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.gemini_api_call.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.gemini_api_trigger_rule.arn
 }
