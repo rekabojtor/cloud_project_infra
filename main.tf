@@ -1,6 +1,17 @@
+# Generating a random string to ensure unique S3 bucket name
+resource "random_string" "random" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+output "website_url" {
+  value = "https://${local.name}.s3.eu-central-1.amazonaws.com/index.html"
+}
+
 # Define local variables
 locals {
-  name           = "reka-puppies"
+  name           = "reka-puppies-${random_string.random.result}"
   codeConnection = "arn:aws:codeconnections:eu-west-1:774023531476:connection/f2d3434b-731c-4533-8621-973555b81a84"
   repository     = "rekabojtor/cloud_project_website"
 }
@@ -8,6 +19,8 @@ locals {
 # Creating an S3 bucket resource
 resource "aws_s3_bucket" "main" {
   bucket = local.name
+  # Ensure the bucket contents are deleted when the bucket is destroyed
+  force_destroy = true
 }
 
 # Configuring the S3 bucket to be able to accessed by public users
@@ -40,7 +53,7 @@ resource "aws_s3_bucket_policy" "index_public" {
       }
     ]
   })
-  depends_on = [ aws_s3_bucket_public_access_block.main ]
+  depends_on = [aws_s3_bucket_public_access_block.main]
 }
 
 # Allow assumption of this role for the codepipeline
@@ -246,4 +259,16 @@ resource "aws_lambda_permission" "allow_eventbridge_invoke" {
   function_name = aws_lambda_function.gemini_api_call.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.gemini_api_trigger_rule.arn
+}
+
+# Invoke lamda to initialize gemini.txt after everything is set up
+data "aws_lambda_invocation" "initialize_gemini_txt" {
+  function_name = aws_lambda_function.gemini_api_call.function_name
+  input      = jsonencode({ operation = "initialize" })
+  depends_on = [
+    resource.aws_iam_role_policy.lambda_policy,
+    resource.aws_s3_bucket.main,
+    resource.aws_secretsmanager_secret_version.gemini_api_key_version,
+    resource.aws_lambda_function.gemini_api_call
+  ]
 }
