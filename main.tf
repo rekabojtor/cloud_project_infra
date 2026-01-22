@@ -40,6 +40,7 @@ resource "aws_s3_bucket_policy" "index_public" {
       }
     ]
   })
+  depends_on = [ aws_s3_bucket_public_access_block.main ]
 }
 
 # Allow assumption of this role for the codepipeline
