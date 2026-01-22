@@ -1,6 +1,6 @@
 # Define local variables
 locals {
-  name           = "reka-cloudproject"
+  name           = "reka-puppies"
   codeConnection = "arn:aws:codeconnections:eu-west-1:774023531476:connection/f2d3434b-731c-4533-8621-973555b81a84"
   repository     = "rekabojtor/cloud_project_website"
 }
@@ -10,7 +10,7 @@ resource "aws_s3_bucket" "main" {
   bucket = local.name
 }
 
-# Enabling public access to the S3 bucket
+# Configuring the S3 bucket to be able to accessed by public users
 # (because by default it is blocked for public access due to security)
 resource "aws_s3_bucket_public_access_block" "main" {
   bucket = aws_s3_bucket.main.id
@@ -109,7 +109,7 @@ resource "aws_codepipeline" "reka_git_to_s3_pipeline" {
   stage {
     name = "Source"
 
-    # Codepipeline downloads from GitHub
+    # Codepipeline downloads from GitHub repository as a zip file
     action {
       name             = "DownloadFromGitHub"
       category         = "Source"
@@ -225,18 +225,20 @@ resource "aws_lambda_function" "gemini_api_call" {
   }
 }
 
-# TODO: Comment
+# Creating a CloudWatch EventBridge rule to trigger the Lambda function daily
 resource "aws_cloudwatch_event_rule" "gemini_api_trigger_rule" {
   name                = "${local.name}-trigger-rule"
   schedule_expression = "rate(1 day)"
 }
 
+# Adding the Lambda function as a target for the EventBridge rule
 resource "aws_cloudwatch_event_target" "gemini_api_trigger_target" {
   rule      = aws_cloudwatch_event_rule.gemini_api_trigger_rule.name
   target_id = "${local.name}-trigger-target"
   arn       = aws_lambda_function.gemini_api_call.arn
 }
 
+# Granting permission by the Lambda function to be invoked by EventBridge
 resource "aws_lambda_permission" "allow_eventbridge_invoke" {
   statement_id  = "AllowExecutionFromEventBridgeDailyRate"
   action        = "lambda:InvokeFunction"
